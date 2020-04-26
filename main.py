@@ -286,3 +286,13 @@ outputFileName = topModule+"4.dcp"
 design.writeCheckpoint(outputFileName)
 print "Wrote DCP '" + os.path.join(os.getcwd(), outputFileName) + "' successfully"
 
+
+######################################################################################
+#                       
+######################################################################################
+
+ret = Router(design).routeDesign()
+
+outputFileName = topModule+"5.dcp"
+design.writeCheckpoint(outputFileName)
+print "Wrote DCP '" + os.path.join(os.getcwd(), outputFileName) + "' successfully"
