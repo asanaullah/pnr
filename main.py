@@ -9,6 +9,7 @@ from com.xilinx.rapidwright.design import DesignTools
 from com.xilinx.rapidwright.design import NetType
 from com.xilinx.rapidwright.design import Unisim
 from com.xilinx.rapidwright.design import Module
+from com.xilinx.rapidwright.design import SitePinInst
 from com.xilinx.rapidwright.device import Device
 from com.xilinx.rapidwright.device import Site
 from com.xilinx.rapidwright.device import BEL
@@ -31,15 +32,117 @@ from com.xilinx.rapidwright.util import FileTools
 from com.xilinx.rapidwright.router import RouteNode
 from com.xilinx.rapidwright.router import Router
 from com.xilinx.rapidwright.util   import MessageGenerator
-
-
+from java.util import HashSet
+from java.util import List
+from pprint import pprint
+import Queue
+from Queue import PriorityQueue   
 
 ######################################################################################
 #                       
 ######################################################################################
 
-
 topModule = "top";
+
+######################################################################################
+#                       
+######################################################################################
+
+verilog_code="""
+module top(
+input i_clk,
+input [1:0] in0,
+input [1:0] in1,
+output [2:0] out);
+
+wire clk;
+reg [2:0] result;
+
+BUFGCTRL 
+#(.PRESELECT_I0(1'b1))
+clk_buf(
+.I1(1'b0),
+.I0(i_clk),
+.O(clk),
+.S0(1'b1),
+.CE0(1'b1),
+.IGNORE0(1'b0),
+.S1(1'b0),
+.CE1(1'b0),
+.IGNORE1(1'b0)
+);
+
+always @(posedge clk) 
+           result <= {(in1[1]&in0[1])|((in1[0]&in0[0])&(in1[1]^in0[1])),(in1[1]^in0[1])^(in1[0]&in0[0]),in1[0]^in0[0]};
+//         result <= in0+in1;
+        
+assign out = result;
+
+endmodule
+"""
+
+verilog_file = open(topModule+".v","w")
+ret = verilog_file.write(verilog_code)
+verilog_file.close()
+
+######################################################################################
+#                       
+######################################################################################
+
+yosys_cmd = """yosys -p "synth_xilinx -flatten -abc9 -nobram -arch xc7 -top """+topModule+"""; write_edif """+topModule+""".edif" """+topModule+""".v"""
+ret = os.system(yosys_cmd)
+
+######################################################################################
+#                       
+######################################################################################
+
+# still need to link to topModule in some places!
+xpr_code="""
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Product Version: Vivado v2017.2 (64-bit)              -->
+<!--                                                         -->
+<!-- Copyright 1986-2017 Xilinx, Inc. All Rights Reserved.   -->
+
+<Project Version="7" Minor="20" Path="./vivado_files/"""+topModule+""".xpr">
+  <DefaultLaunch Dir="$PWD"/>
+  <Configuration>
+    <Option Name="Part" Val="xc7a35tcsg324-1"/>
+  </Configuration>
+  <FileSets Version="1" Minor="31">
+    <FileSet Name="sources_1" Type="DesignSrcs" RelSrcDir="$PSRCDIR/sources_1">
+      <Filter Type="Srcs"/>
+      <File Path="./top.edif">
+      </File>
+      <Config>
+        <Option Name="DesignMode" Val="GateLvl"/>
+        <Option Name="TopModule" Val="top"/>
+        <Option Name="TopRTLFile" Val="top.edif"/>
+      </Config>
+    </FileSet>
+  </FileSets>
+</Project>
+"""
+
+if not os.path.isdir('./vivado_files'):
+    os.mkdir(os.getcwd()+"/vivado_files")
+xpr_file = open("vivado_files/"+topModule+".xpr","w")
+ret = xpr_file.write(xpr_code)
+xpr_file.close()
+
+tcl_code="""
+link_design
+write_edif """+topModule+"""_2.edif
+"""
+tcl_file = open(topModule+".tcl","w")
+ret = tcl_file.write(tcl_code)
+tcl_file.close()
+
+vivado_cmd = """vivado vivado_files/"""+topModule+""".xpr -nolog -nojournal -notrace -mode batch -source """+topModule+""".tcl"""
+ret = os.system(vivado_cmd)
+
+######################################################################################
+#                       
+######################################################################################
 
 parser = EDIFParser(topModule+"_2.edif")
 netlist = parser.parseEDIFNetlist()
@@ -47,10 +150,13 @@ design = Design(topModule,"xc7a35tcsg324-1")
 design.setAutoIOBuffers(False) 
 design.setNetlist(netlist)
 
+outputFileName = topModule+"0.dcp"
+design.writeCheckpoint(outputFileName)
+print "Wrote DCP '" + os.path.join(os.getcwd(), outputFileName) + "' successfully"
+
 net = design.getNetlist()
 net.setDevice(design.getDevice())
 topCell = net.getCell("top")
-
 
 Pin_Constraints = {'i_clk' : 'E3' , 
                   'in0[1]': 'C11' ,
@@ -62,12 +168,9 @@ Pin_Constraints = {'i_clk' : 'E3' ,
                   'out[0]': 'H5'
                  }
 
-
 ######################################################################################
 #                       
 ######################################################################################
-
-
 
 for pin in Pin_Constraints.keys():
     for topnets in topCell.getNets().toArray().tolist():
@@ -78,19 +181,14 @@ for pin in Pin_Constraints.keys():
                         if str(cellName) in str(entry):
                             ret = design.placeIOB(cellName, Pin_Constraints.get(pin), "LVCMOS33")
 
-
-
-
 cell_Names = topCell.getCellInsts().toArray().tolist()
 placement_list = []
 random.seed(6)
 for cn in cell_Names:
     if ("GND" in str(cn.getCellType())) or ("VCC" in str(cn.getCellType())):
-         continue
-            
+        continue
     elif ("IBUF" in str(cn.getCellType())) or ("OBUF" in str(cn.getCellType())):
         continue
-        
     elif ("BUFGCTRL" in str(cn.getCellType())):
         topCell.removeCellInst(str(cn))
         loc = "BUFGCTRL_X0Y16/BUFGCTRL"
@@ -102,8 +200,6 @@ for cn in cell_Names:
         ret.connectStaticSourceToPin(NetType.GND ,"S1")
         ret.connectStaticSourceToPin(NetType.GND ,"IGNORE1")
         ret.connectStaticSourceToPin(NetType.GND ,"IGNORE0")
-        
-        
     elif ("FDRE" in str(cn.getCellType())): 
         bels = Design().createCell(str(cn),cn).getCompatiblePlacements().get(SiteTypeEnum.SLICEL)
         sites = design.getDevice().getAllCompatibleSites(SiteTypeEnum.SLICEL)    
@@ -122,7 +218,6 @@ for cn in cell_Names:
         ret = design.createAndPlaceCell(cell,unsm,loc)        
         ret.connectStaticSourceToPin(NetType.GND ,"R")
         ret.connectStaticSourceToPin(NetType.VCC ,"CE")
-        
     elif ("LUT" in str(cn.getCellType())):
         cell = design.createCell(str(cn),cn)
         bels = cell.getCompatiblePlacements().get(SiteTypeEnum.SLICEL)
@@ -136,19 +231,14 @@ for cn in cell_Names:
                 placement_list.append((str(site)+"/"+str(bel))) 
                 running = 0
                 design.placeCell(cell,site,bel)
-                
-                
-                
-outputFileName = topModule+".dcp"
+ 
+outputFileName = topModule+"1.dcp"
 design.writeCheckpoint(outputFileName)
 print "Wrote DCP '" + os.path.join(os.getcwd(), outputFileName) + "' successfully"
-
-
 
 ######################################################################################
 #                       
 ######################################################################################
-
 
 for i in design.getNets().toArray().tolist():
     design.removeNet(i)
@@ -172,21 +262,16 @@ for physNet in design.getNets().toArray().tolist():
         siteInst = physCell.getSiteInst()
         siteWires = []
         ret = physCell.getSitePinFromPortInst(portInst,siteWires)            
-        physNet.createPin(portInst.isOutput(),siteWires[len(siteWires)-1],siteInst)  
-        
+        physNet.createPin(portInst.isOutput(),siteWires[len(siteWires)-1],siteInst)
             
-        
 outputFileName = topModule+"2.dcp"
 design.writeCheckpoint(outputFileName)
 print "Wrote DCP '" + os.path.join(os.getcwd(), outputFileName) + "' successfully"
 
-
-
 ######################################################################################
 #                       
 ######################################################################################
-    
-    
+        
 for edifNet in topCell.getNets().toArray().tolist():
     if str(edifNet) in Pin_Constraints.keys() and not(str(edifNet) == "clk"): continue
     if  (str(edifNet) == "GND_NET"): continue
@@ -208,8 +293,7 @@ for edifNet in topCell.getNets().toArray().tolist():
                     break
             sitepip = siteInst.getSitePIP(belpin)
             siteInst.addSitePIP(sitepip)
-            siteInst.routeSite()
-            
+            siteInst.routeSite()        
         elif "FDRE" in str(physCell.getType()):
             if ("CE" == str(portInst.getName())):
                 belpin = siteInst.getSite().getBEL("CEUSEDMUX").getPin("1")
@@ -251,8 +335,6 @@ for edifNet in topCell.getNets().toArray().tolist():
                     sitepip = siteInst.getSitePIP(belpin)
                     siteInst.addSitePIP(sitepip)
                     siteInst.routeSite()
-                
-                               
         elif "LUT" in str(physCell.getType()):
             siteWires = []
             ret = physCell.getSitePinFromPortInst(portInst,siteWires)
@@ -267,32 +349,113 @@ for edifNet in topCell.getNets().toArray().tolist():
                 siteInst.addSitePIP(sitepip)
                 siteInst.routeSite()
 
-                
-
 outputFileName = topModule+"3.dcp"
 design.writeCheckpoint(outputFileName)
 print "Wrote DCP '" + os.path.join(os.getcwd(), outputFileName) + "' successfully"
-
 
 ######################################################################################
 #                       
 ######################################################################################
 
-design.routeSites()  # not necessary, but helps route input site wire for OBUFS
-
-
+design.routeSites() # not necessary, but helps route input site wire for OBUFS
 
 outputFileName = topModule+"4.dcp"
 design.writeCheckpoint(outputFileName)
 print "Wrote DCP '" + os.path.join(os.getcwd(), outputFileName) + "' successfully"
 
+######################################################################################
+#                       
+######################################################################################
+#assuming one buffer per FF
+def cost (s1, s2):
+    return abs(s1.getRpmX() - s2.getRpmX()) + abs(s1.getRpmY() - s2.getRpmY())
+
+def closestSite (s1, possible_sites):
+    p = PriorityQueue()
+    for s2 in possible_sites:
+        p.put((cost(s1,s2),s2))
+    return p.get()
+
+sites = []
+pins = design.getNet("clk").getSinkPins()
+for pin in pins:
+    pin_site = pin.getSite()
+    bufhce_sites =  design.getDevice().getAllCompatibleSites(SiteTypeEnum.BUFHCE).tolist()
+    sites.append(closestSite(pin_site,bufhce_sites)[1])
+
+for i in range(len(pins)):
+    loc = str(sites[i]) +"/BUFHCE"
+    ret = design.createAndPlaceCell("bufhce_"+str(i),Unisim.BUFHCE,loc) 
+    ret.connectStaticSourceToPin(NetType.VCC ,"CE")
+    ret.getSiteInst().addSitePIP(ret.getSiteInst().getSitePIP(ret.getSiteInst().getBEL("CEINV").getPin("CE")))
+    ret.getSiteInst().routeSite()
+    net = design.createNet("clk" + str(i))
+    design.getNet("clk").removePin(pins[i])
+    design.getNet("clk").addPin(SitePinInst("I",ret.getSiteInst()))
+    net.addPin(SitePinInst("O",ret.getSiteInst()))
+    net.addPin(pins[i])
+    topCell.getNet("clk"+str(i)).createPortInst("O",ret)
+    topCell.getNet("clk"+str(i)).addPortInst(topCell.getNet("clk").getPortInsts().toArray().tolist()[0])
+    topCell.getNet("clk").createPortInst("I",ret)
+    topCell.getNet("clk").removePortInst(topCell.getNet("clk").getPortInsts().toArray().tolist()[0])
 
 ######################################################################################
 #                       
 ######################################################################################
 
-ret = Router(design).routeDesign()
+def costFunction(curr, snk):
+    return curr.getManhattanDistance(snk) + curr.getLevel()/8  
 
+def routeNet(net, usedPIPs):
+    path = []
+    for sink in net.getPins():
+        if sink.equals(net.getSource()): 
+            continue
+        q = RouteNode.getPriorityQueue()
+        q.add(net.getSource().getRouteNode())
+        path.extend(findRoute(q,sink.getRouteNode())) 
+    path = list(dict.fromkeys(path))
+    net.setPIPs(path)
+    return
+
+def findRoute(q, snk):
+    visited = HashSet()
+    while(not q.isEmpty()):
+        curr = q.poll()
+        if(curr.equals(snk)):
+            print "Visited Wire Count: " + str(visited.size())
+            return curr.getPIPsBackToSource()
+        visited.add(curr)
+        for wire in curr.getConnections():
+            nextNode = RouteNode(wire,curr)
+            if visited.contains(nextNode): continue
+            if wire.isRouteThru(): continue
+            curr_cost = costFunction(nextNode,snk)
+            nextNode.setCost(curr_cost)
+            q.add(nextNode)
+    print "Route failed!"
+    return []
+
+usedPIPs = []           
+for net in design.getNets():
+    if "clk" in str(net):  
+        routeNet(net,usedPIPs)
+        net.lockRouting()
+  
 outputFileName = topModule+"5.dcp"
+design.writeCheckpoint(outputFileName)
+print "Wrote DCP '" + os.path.join(os.getcwd(), outputFileName) + "' successfully"
+
+######################################################################################
+#                       
+######################################################################################
+
+Router(design).routeDesign()
+
+for net in design.getNets():
+    if "clk" in str(net):
+        net.unlockRouting()
+
+outputFileName = topModule+"6.dcp"
 design.writeCheckpoint(outputFileName)
 print "Wrote DCP '" + os.path.join(os.getcwd(), outputFileName) + "' successfully"
