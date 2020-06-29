@@ -350,7 +350,7 @@ Next we create an **EDIFCell** for that module.
 ```python
        ret = EDIFCell(library,cell)
 ```
-Next we will create an **EDIFPort** for each port of the module. Doing so requires calling the `createPort` routine, which has three inputs: i) name of the port, ii)  an **EDIFDirection**, and iii) the bus width (almost always 1 for target technology modules). All the required information is available in `jnet`. 
+Next we will create an **EDIFPort** for each port of the module. Doing so requires calling the `createPort()` routine, which has three inputs: i) name of the port, ii)  an **EDIFDirection**, and iii) the bus width (almost always 1 for target technology modules). All the required information is available in `jnet`. 
 
 ```python
        for port in jnet['modules'][cell]['ports'].keys():
@@ -633,7 +633,7 @@ We begin by getting the name of the top module in our Verilog code.
     topModule = topCell.getName()
 ```
 
-Next we use the `getStaticNet` routine in the **EDIFTools** class to create two separate **EDIFNet**s for "GND" and "VCC".
+Next we use the `getStaticNet()` routine in the **EDIFTools** class to create two separate **EDIFNet**s for "GND" and "VCC".
 
 ``` python
     gnd = EDIFTools.getStaticNet(NetType.GND, topCell, netlist);
@@ -659,7 +659,7 @@ Similar to how we created **EDIFPortInst**s in the first pass, we will loop over
 
 ### Putting It All Together 
 
-Finally, we put all the routines developed in this Step into a single `read_json` routine that takes the JSON file name (`filename`), Verilog top module name (`topModule`), and device name (`device`) as inputs. The `read_json` routine: i) creates our  **Design** (`design`) by calling the **Design** constructor, ii) builds the logical netlist for `design` by using the routines developed in this Step, and iii) returns `design` which now has the complete logical netlist. 
+Finally, we put all the routines developed in this Step into a single `read_json()` routine that takes the JSON file name (`filename`), Verilog top module name (`topModule`), and device name (`device`) as inputs. The `read_json()` routine: i) creates our  **Design** (`design`) by calling the **Design** constructor, ii) builds the logical netlist for `design` by using the routines developed in this Step, and iii) returns `design` which now has the complete logical netlist. 
 
 ``` python
 def read_json (filename, topModule, device):
@@ -702,7 +702,7 @@ def placeIOBuffers(design , constraints):
 ```
 
 
-The `placeIOB` routine in design requires three inputs to place a I/O buffer component: i) the **EDIFCellInst** for the buffer, ii) the chip package pin it corresponds to, and iii) the IO Standard. Information for (ii) and (iii) is provided by the user in the `constraints` object from Step 0. We only need to get the **EDIFCellInst**. 
+The `placeIOB()` routine in design requires three inputs to place a I/O buffer component: i) the **EDIFCellInst** for the buffer, ii) the chip package pin it corresponds to, and iii) the IO Standard. Information for (ii) and (iii) is provided by the user in the `constraints` object from Step 0. We only need to get the **EDIFCellInst**. 
 
 Doing so requires knowledge of how the I/O *Sites* in Xilinx 7-Series FPGAs are structured (shown in the image below). The specific **EDIFCellInst** we are interested in connects to the chip pin's *PAD* using a single **SiteWire**. If we can find the **EDIFNet** corresponding to this connection, we can find the two **EDIFPortInst**s in this **EDIFNet**. And once we know the **EDIFPortInst**s, we can get the **EDIFCellInst**s they belong to. Note that since the chip pin's *PAD* is not connected to an **EDIFCellInst**, there will be only one result in our search. Let's look at how this will be done using RapidWright APIs.  
 
@@ -736,13 +736,13 @@ For each **EDIFCellInst** and **EDIFPortInst** pair we pick up, we leverage the 
 ``` python        
                             if str(cellName) in str(entry):                  
 ```
-If all conditions are met, we have the **EDIFCellInst**. We can then go ahead and place the **EDICellInst** at the location given in `constraints`. The `placeIOB` routine both creates a new **Cell** for this placed buffer in **Design** and returns it. The returned **Cell** is placed in `ret`. 
+If all conditions are met, we have the **EDIFCellInst**. We can then go ahead and place the **EDICellInst** at the location given in `constraints`. The `placeIOB()` routine both creates a new **Cell** for this placed buffer in **Design** and returns it. The returned **Cell** is placed in `ret`. 
 
 ``` python
                                 ret = design.placeIOB(cellName, constraints.get(pin).get('LOC'), constraints.get(pin).get('IOSTANDARD'))
 ```
 
-Finally, we call the `addProperty` routines in the **Cell** to add the remaining properties in the `constraints` object. 
+Finally, we call the `addProperty()` routines in the **Cell** to add the remaining properties in the `constraints` object. 
 
 ``` python
                                 ret.addProperty("IOSTANDARD",constraints.get(pin).get("IOSTANDARD"))
@@ -788,7 +788,7 @@ def placeCells(design):
                     design.placeCell(cell,site,bel)
 ```
 
-Since we will be creating and placing **Cell**s in **Design**, we pass **Design** as the input to the `placeCells` routine.  
+Since we will be creating and placing **Cell**s in **Design**, we pass **Design** as the input to the `placeCells()` routine.  
 
 ```python
 def placeCells(design):
@@ -1267,7 +1267,7 @@ def cost (s1, s2):
     return abs(s1.getRpmX() - s2.getRpmX()) + abs(s1.getRpmY() - s2.getRpmY())
 ```
 
-Next, we write a `closestSite` routine which returns the nearest *Site* to the **Site** `s1` from a list of possible **Site**s `possible_sites`. We simply evaluate the cost for each pair, and built a Priority Queue for the resulting tuple. Once we've iterated over all possibilities in `possible_sites`, we return the **Site** with the tuple with the lowest cost. 
+Next, we write a `closestSite()` routine which returns the nearest *Site* to the **Site** `s1` from a list of possible **Site**s `possible_sites`. We simply evaluate the cost for each pair, and built a Priority Queue for the resulting tuple. Once we've iterated over all possibilities in `possible_sites`, we return the **Site** with the tuple with the lowest cost. 
 
 ```python
 def closestSite (s1, possible_sites):
@@ -1341,7 +1341,7 @@ We then set up a nested loop which iterates over each `BUFGCTRL` driven **Net**,
         for i in range(len(pins)):         
 ```
 
-For each `pin`, we get its **Site** and then call the `closestSite` routine. From the returned tuple, we can get the target `BUFHCE` **Site**. 
+For each `pin`, we get its **Site** and then call the `closestSite()` routine. From the returned tuple, we can get the target `BUFHCE` **Site**. 
 
 ```python
             pin = pins[i]
