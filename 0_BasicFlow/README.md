@@ -42,7 +42,7 @@ For synthesis, we will be using [Yosys](http://www.clifford.at/yosys/about.html)
 
 ### Setting Up The Environment
 
-This is the script we use to build Yosys. Since we are reusing the script from [here](https://github.com/asanaullah/ZipVersa-SSDP), there might be more dependencies installed than needed (will be fixed in a future commit). 
+This is the script we use to build Yosys. Since we are reusing the script from [here](https://github.com/asanaullah/ZipVersa-SSDP), there might be more dependencies installed than needed. 
 
 ```bash
 sudo dnf -y groupinstall "Development Tools" "Development Libraries"
@@ -363,7 +363,7 @@ Next we will create an **EDIFPort** for each port of the module. Doing so requir
             ret.createPort(port,direction,1)
 ```
 
-Finally, we add the **EDIFCell** to the `library`. Note that this may not be necessary if the **EDIFCell** constructor automatically adds the **EDIFCell** to the **EDIFLibrary**. It will be removed in a future commit if so. 
+Finally, we add the **EDIFCell** to the `library`. Note that this may not be necessary if the **EDIFCell** constructor automatically adds the **EDIFCell** to the **EDIFLibrary**.
 
 ```python
         library.addCell(ret)
@@ -564,7 +564,7 @@ For each **EDIFNet** that we create, we loop over every port of every cell for `
 
 Next, we compare the net ID from cell connection data to the net ID of the current **EDIFNet**.  If there is a match, and we have not already added this unique "port,cell" tuple to `ports`, we'll create an **EDIFPortInst** for it in the current **EDIFNet** and add the corresponding tuple to `ports`.  Otherwise, we skip this port. 
 
-In some cases, a port may be connected to multiple nets. By default, we select the first net it `value`. We might need an extra step here where we merge nets in `jnet` to ensure a port is only connected to a single net. Since it wasn't needed for the current design, it was skipped for now. However, a routine for this will be added in a future commit if such a situation is encountered when we look at more complex designs. 
+In some cases, a port may be connected to multiple nets. By default, we select the first net it `value`. We might need an extra step here where we merge nets in `jnet` to ensure a port is only connected to a single net. Since it wasn't needed for the current design, it was skipped for now. 
 
 ``` python
                     if value[0] == connectionIDs[i]:
@@ -621,7 +621,7 @@ def createStaticSourceNets(jnet, topCell, netlist):
                 vcc.createPortInst(port , topCell.getCellInst(cell))
 ```
 
-The inputs to our routine are the imported JSON file `jnet`, the **EDIFCell** `topCell` that we are building, and the **EDIFNetlist** `netlist`. We will use `netlist` and `topCell` to create the VCC and GND **EDIFNet**s, and then create and add **EDIFPortInst**s to them  (where applicable).  Note that we did not need to pass both `topCell` and `netlist` since they can reference each other using inbuilt routines; this will be optimized in a future commit. 
+The inputs to our routine are the imported JSON file `jnet`, the **EDIFCell** `topCell` that we are building, and the **EDIFNetlist** `netlist`. We will use `netlist` and `topCell` to create the VCC and GND **EDIFNet**s, and then create and add **EDIFPortInst**s to them  (where applicable).  Note that it is not necessary to pass both `topCell` and `netlist` since they can reference each other using inbuilt routines. 
 
 ``` python
 def createStaticSourceNets(jnet, topCell, netlist):
@@ -655,9 +655,7 @@ Similar to how we created **EDIFPortInst**s in the first pass, we will loop over
                 gnd.createPortInst(port , topCell.getCellInst(cell))
             elif value[0] == "1":
                 vcc.createPortInst(port , topCell.getCellInst(cell))
-```
-
-Note that we wrote this routine with the assumption that none of the external I/O ports are not tied to a fixed logic value. This will not always be true, and therefore support for connecting external output ports to VCC and GND nets will be added in a  future commit. 
+``` 
 
 ### Putting It All Together 
 
@@ -756,7 +754,7 @@ Finally, we call the `addProperty` routines in the **Cell** to add the remaining
 ## Step 3: Place - Using A Random Placer Algorithm
 The next step is placing the remaining **EDIFCellInst**s on the chip. An exception to this is **EDIFCellInst**s of types *VCC* and *GND*. This is because there is no one specific location for them; there are **BEL**s throughput the chip which have *HARD 1* (VCC) and *HARD 0* (GND) pins. Thus, to provide VCC and GND connections, a placement operation is not necessary and we only need to ensure that their corresponding **Net**s are routed properly. 
 
-We will be using the simplest placement algorithm for this part i.e. a random placer. Moreover, also for simplicity, we will not be doing any packing for this design. The code and its breakdown is given below. Note that we have currently hardcoded support for the different technologies used in our design i.e. IBUF, OBUF, BUFGCTRL, LUT and FDRE. In a future commit, this will be replaced (if possible) with a combination of RapidWright APIs that can automatically derive the **SiteTypeEnum** for a given technology e.g. SLICEL or SLICEM for FDRE.  Also note that we have hardcoded the placement of BUFGCTRL. This is because the design is sufficiently constrained by the clock pin for us to know which of the vertical clock buffers we should be using. 
+We will be using the simplest placement algorithm for this part i.e. a random placer. Moreover, also for simplicity, we will not be doing any packing for this design. The code and its breakdown is given below. Note that we have currently hardcoded support for the different technologies used in our design i.e. IBUF, OBUF, BUFGCTRL, LUT and FDRE - it may be possible to replace our approach with a combination of RapidWright APIs that can automatically derive the **SiteTypeEnum** for a given technology e.g. SLICEL or SLICEM for FDRE. Also note that we have hardcoded the placement of BUFGCTRL. This is because the design is sufficiently constrained by the clock pin for us to know which of the vertical clock buffers we should be using. 
 
 ```python
 def placeCells(design):
