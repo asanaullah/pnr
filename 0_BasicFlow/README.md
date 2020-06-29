@@ -215,7 +215,7 @@ One last thing before diving into the code. There are a lot of well defined obje
 20. **RouteNode** : A **RouteNode** object can be created from the RapidWright [Router](https://www.rapidwright.io/javadoc/com/xilinx/rapidwright/router/package-summary.html) package. It is useful for keeping track of *PIPs* visited when traversing a chip's routing resources.
 
 
-<ins>To simplify our discussion in the rest of this document, we will refer to RapidWright objects as "**<Object_Name>**" instead of "**<Object_Name>** object". </ins> 
+###<ins>To simplify our discussion in the rest of this document, we will refer to RapidWright objects as "**<Object_Name>**" instead of "**<Object_Name>** object". </ins> 
 
 ![Simplified hierarchy of objects in RapidWright](https://github.com/asanaullah/images/blob/master/pnr/0/hierarchy.PNG)
 
