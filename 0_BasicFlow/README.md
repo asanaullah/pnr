@@ -1,7 +1,7 @@
 # An Open Source FPGA Compilation Flow using RapidWright
 
 ## Aim
-In this project, our aim is to use RapidWright to build a basic open source compilation flow for the 7 series Xilinx FPGAs. The flow is not meant to be complete and comprehensive. Rather, it provides insights into the hardware generation process using RapidWright, and how RapidWright can be integrated with existing open source tools.
+In this project, our aim is to use RapidWright to build a basic open source compilation flow for the 7 series Xilinx FPGAs. The flow is not meant to be complete and comprehensive. Rather, it provides insights into the hardware generation process, and how RapidWright can be integrated with existing open source tools.
 
 ## Status
 - Synthesis (complete)
